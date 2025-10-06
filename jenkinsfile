@@ -1,0 +1,62 @@
+pipeline {
+  agent { label 'win' }     // your Windows agent
+  triggers { githubPush() } // auto-build when you push to GitHub
+  options { timestamps() }  // show timestamps in logs
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        echo "✅ Code fetched from GitHub"
+      }
+    }
+
+    stage('Build') {
+      steps {
+        // If Node.js project
+        bat '''
+          if exist package.json (
+            echo Installing dependencies...
+            npm install
+            echo Building project...
+            npm run build
+          ) else (
+            echo Static site detected, copying files...
+            if exist dist rmdir /s /q dist
+            mkdir dist
+            xcopy /e /i /y index.html dist\\
+            if exist css xcopy /e /i /y css dist\\css\\
+            if exist js xcopy /e /i /y js dist\\js\\
+          )
+        '''
+      }
+    }
+
+    stage('Test') {
+      steps {
+        // Optional test phase if your project includes tests
+        bat 'echo Running basic checks...'
+      }
+    }
+
+    stage('Archive') {
+      steps {
+        echo "Zipping and archiving build output..."
+        bat '''
+          if exist EcoSwap_build.zip del /f /q EcoSwap_build.zip
+          powershell -NoProfile -Command "Compress-Archive -Path 'dist\\*' -DestinationPath 'EcoSwap_build.zip' -Force"
+        '''
+        archiveArtifacts artifacts: 'EcoSwap_build.zip'
+      }
+    }
+  }
+
+  post {
+    success {
+      echo '🎉 Build succeeded and artifacts are ready!'
+    }
+    failure {
+      echo '❌ Build failed — check Console Output.'
+    }
+  }
+}
